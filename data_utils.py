@@ -4,9 +4,28 @@
 @package css
 @file css/data_utils.py
 @author Edward Hunter
-@author K Sree Harsha
-@brief Utility module for retrieving and loading training and testing
-text datasets.
+@brief Utility module for retrieving and loading training and testing text datasets.
+"""
+
+# Copyright and licence.
+"""
+Copyright (C) 2014 Edward Hunter
+edward.a.hunter@gmail.com
+840 24th Street
+San Diego, CA 92102
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from common import *
@@ -33,10 +52,10 @@ REUTERS_CACHE_NAME = "reuters21578.pkz"
 REUTERS10_IDX_NAME = "reuters21578-10-idx.pkz"
 REUTERS10_CACHE_NAME = "reuters21578-10.pkz"
 
-DATASETS = ('20news','20news4', '20news5', 'reuters21578-10')
+DATASETS = ('20news','20news4', '20news5', 'reuters21578-10', 'senate')
 
 """
-20 Newsgroups labels
+20 Newsgroups Labels
 0   'alt.atheism'
 1   'comp.graphics'
 2   'comp.os.ms-windows.misc'
@@ -46,7 +65,7 @@ DATASETS = ('20news','20news4', '20news5', 'reuters21578-10')
 6   'misc.forsale'
 7   'rec.autos'
 8   'rec.motorcycles'
-9  'rec.sport.baseball'
+9   'rec.sport.baseball'
 10  'rec.sport.hockey'
 11  'sci.crypt'
 12  'sci.electronics'
@@ -59,8 +78,8 @@ DATASETS = ('20news','20news4', '20news5', 'reuters21578-10')
 19  'talk.religion.misc'
 
 4 Newgroups Labels:
-0   'alt.atheism'
 1   'comp.graphics'
+7   'rec.autos'
 14  'sci.space'
 19  'talk.religion.misc'
 
@@ -139,7 +158,7 @@ def make_20news(data_home=DATA_HOME):
     open(news20_path, 'wb').write(pickle.dumps(data).encode('zip'))
 
     # Populate the 4 newsgroup data into our result data dictionary.
-    data4_cats = {0:0, 1:1, 14:2, 19:3}
+    data4_cats = {1:0, 7:1, 14:2, 19:3}
     data4 = {
         'target_names' : [data['target_names'][x] for x in data4_cats.keys()],
         'train' : [],
@@ -278,6 +297,26 @@ def make_reuters10(data_home=DATA_HOME, reuters_cache_name=REUTERS_CACHE_NAME,
     # Write out the populated reuters 10 dictionary.
     open(reuters10_cache_path, 'wb').write(pickle.dumps(data).encode('zip'))
 
+def get_cat_data(name, data_home=DATA_HOME):
+    """
+    Return a dict of data organized for inspection.
+    @param name: The data file name.
+    @data_home: The data file directory.
+    @return cat_data: A dict of data organized by category.
+    """
+    data = load_data(name, data_home)
+    cat_data = {'train' : {}, 'test' : {}}
+    for x in data['target_names']:
+        cat_data['train'][x] = []
+        cat_data['test'][x] = []
+    for i, x in enumerate(data['train_target']):
+        #print '-'*100
+        #print data['train'][i]
+        cat_data['train'][data['target_names'][x]].append(data['train'][i])
+    for i, x in enumerate(data['test_target']):
+        cat_data['test'][data['target_names'][x]].append(data['test'][i])
+    return cat_data
+
 
 def load_data(name, data_home=DATA_HOME):
     """
@@ -290,7 +329,22 @@ def load_data(name, data_home=DATA_HOME):
     if not os.path.isfile(file_path):
         raise ValueError('Could not find the file %s' % file_path)
 
-    return pickle.loads(open(file_path, 'rb').read().decode('zip'))
+    data = pickle.loads(open(file_path, 'rb').read().decode('zip'))
+    print 'Class Names:'
+    training_total = 0
+    testing_total = 0
+    for i, x in enumerate(data['target_names']):
+        training_count = len([y for y in data['train_target'] if y==i])
+        testing_count = len([y for y in data['test_target'] if y==i])
+        training_total += training_count
+        testing_total += testing_count
+        print '%5i  %25s  train size: %8i, test size: %8i' % \
+              (i, x, training_count, testing_count)
+    print '%5s  %25s  train size: %8i, test size: %8i' % \
+            ('', 'Totals:', training_total, testing_total)
+
+
+    return data
 
 
 # If run as a script, destroy and recreate all data pickles.

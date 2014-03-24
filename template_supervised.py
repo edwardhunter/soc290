@@ -4,8 +4,28 @@
 @package css
 @file css/template_supervised.py
 @author Edward Hunter
-@author Your Name Here
 @brief A template to be customized for supervised learning experiments.
+"""
+
+# Copyright and licence.
+"""
+Copyright (C) 2014 Edward Hunter
+edward.a.hunter@gmail.com
+840 24th Street
+San Diego, CA 92102
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 # Import common modules and utilities.
@@ -40,28 +60,44 @@ def train(data, dataset, model, **kwargs):
     data_train = data['train']
     data_train_target = data['train_target']
 
+    # Retrieve options.
+    dim = kwargs.get('dim', None)
+    df_min = kwargs.get('df_min',1)
+    df_max = kwargs.get('df_max',1.0)
+
+    # Create dimension reducer.
+    fselector = None
+    if dim:
+        fselector = SelectKBest(chi2, k=dim)
+
     ############################################################
     # Create feature extractor, classifier.
     ############################################################
     # TODO: create clf, vectorizer.
     ############################################################
 
-    ############################################################
-    # If specified, create feature dimension reducer.
-    ############################################################
-    # TODO: create fselector.
-    ############################################################
-
-    ############################################################
     # Extract features, reducing dimension if specified.
-    ############################################################
-    # TODO
-    ############################################################
+    print 'Extracting text features...'
+    start = time.time()
+    x_train = vectorizer.fit_transform(data_train)
+    if fselector:
+        x_train = fselector.fit_transform(x_train, data_train_target)
+        if fselector.__normalize:
+            x_train = normalize(x_train)
+    print 'Extracted in %f seconds.' % (time.time() - start)
+    print 'Feature dimension: %i' %x_train.shape[1]
+    print 'Feature density: %f' % density(x_train)
+
+    # Train classifier.
+    print 'Training classifier...'
+    start = time.time()
+    clf.fit(x_train, data_train_target)
+    print 'Trained in %f seconds.' % (time.time() - start)
 
     ############################################################
-    # Train classifier.
+    # Grid search and top feature output for SVMs.
     ############################################################
-    # TODO
+    # TODO: SVMs only.
     ############################################################
 
     # Create classifier and feature extractor file names.
@@ -88,7 +124,6 @@ def train(data, dataset, model, **kwargs):
     print 'Feature extractor written to file %s' % (vpname)
 
     # Write out dimension reducer.
-    dim = kwargs.get('dim', None)
     if dim:
         dpname = os.path.join(MODEL_HOME,dfname)
         fhandle = open(dpname,'w')
@@ -143,11 +178,13 @@ def predict(input_data, cfname, vfname, **kwargs):
         fhandle.close()
         print 'Feature selector read from file %s' % (dpname)
 
-    ############################################################
     # Compute features and predict.
-    ############################################################
-    # TODO: create variable pred.
-    ############################################################
+    x_test = vectorizer.transform(input_data)
+    if dfname:
+        x_test = fselector.transform(x_test)
+        if fselector.__normalize:
+            x_test = normalize(x_test)
+    pred = clf.predict(x_test)
 
     # Return vector of predicted labels.
     return pred
@@ -190,15 +227,13 @@ def eval(data, dataset, model, **kwargs):
     # Predict test data.
     pred = predict(data_test, cfname, vfname, dfname=dfname)
 
-    ############################################################
     # Evaluate predictions: metrics.
-    ############################################################
-    # TODO: create values for f1, precision, recall, conf_matrix
-    # TODO: Create variables class_report, conf_matrix.
-    ############################################################
+    class_report = metrics.classification_report(data_test_target, pred,
+                                                 target_names=data_target_names)
+    conf_matrix = metrics.confusion_matrix(data_test_target ,pred)
 
     # Print evaluations.
-    report = ''
+    report = 'Report File: %s\n' % reportname
     report += '-'*80 +'\n'
     report += 'Classification Report:\n'
     report += class_report
@@ -226,16 +261,30 @@ def eval(data, dataset, model, **kwargs):
     rf.write(report)
     rf.close()
 
-    # Save an image of the confusion matrix.
-    if kwargs.get('confusion', False):
-        plt.pcolor(np.flipud(conf_matrix))
+    # Create an image of the log confusion matrix.
+    confusion_image_type =  kwargs.get('confusion', None)
+    if not confusion_image_type:
+        pass
+    elif confusion_image_type not in ('linear','log'):
+        warnstr = 'WARNING: unrecognized confusion image option '
+        warnstr += '"%s"' % confusion_image_type
+        warnstr += '\nConfusion image not saved.'
+        print warnstr
+    else:
+        if confusion_image_type == 'log':
+            log_conf_matrix = np.log10(conf_matrix+1)
+            plt.pcolor(np.flipud(log_conf_matrix))
+            title = '%s %s Log Confusion, %s' % (METHOD, model, dataset)
+        elif confusion_image_type == 'linear':
+            plt.pcolor(np.flipud(conf_matrix))
+            title = '%s %s Confusion, %s' % (METHOD, model, dataset)
         plt.xticks(np.arange(n)+0.5, np.arange(1,n+1))
         plt.yticks(np.arange(n)+0.5, np.arange(n,0, -1))
         plt.xlabel('Predicted Category')
         plt.ylabel('True Category')
         plt.set_cmap('hot')
         plt.colorbar()
-        plt.title('%s %s Confusion, %s' % (METHOD, model, dataset))
+        plt.title(title)
         figpath = os.path.join(REPORT_HOME, figfname)
         plt.savefig(figpath)
 
@@ -254,11 +303,15 @@ if __name__ == '__main__':
                  help='File name appendix string.')
     p.add_option('-d','--dim', action='store', dest='dim', type='int',
                  help='Reduced feature dimension integer.')
-    p.add_option('-c', '--confusion', action='store_true',
-                 dest='confusion', help='Save confusion image.')
-    p.add_option('-o', '--overwrite', action='store_true',
-                 dest='overwrite', help='Overwrite existing files.')
-    p.set_defaults(fappend=None, dim=None, confusion=False, overwrite=False)
+    p.add_option('-c', '--confusion', action='store', dest='confusion',
+                 help='Save confusion image. Options: linear, log')
+    p.add_option('-o', '--overwrite', action='store_true', dest='overwrite',
+                 help='Overwrite existing files.')
+    p.add_option('--df_min', action='store',type='float', dest='df_min',
+                 help='Minimum document frequency proportion (default=None).')
+    p.add_option('--df_max', action='store', type='float', dest='df_max',
+                 help='Maximum document frequency proportion (default=1.0).')
+    p.set_defaults(fappend=None, dim=None, confusion=None, overwrite=False)
 
     ############################################################
     # Add method specific options.
@@ -279,6 +332,9 @@ if __name__ == '__main__':
     dim = opts.dim
     confusion = opts.confusion
     overwrite = opts.overwrite
+    df_min = opts.df_min
+    if df_min == 1.0: df_min = 1
+    df_max = opts.df_max
 
     ############################################################
     # Extract method specific options.
@@ -304,7 +360,8 @@ if __name__ == '__main__':
     else:
         dim_files_present = True
     if overwrite or not model_files_present or not dim_files_present:
-        train(data, dataset, model, dim=dim, fappend=fappend)
+        train(data, dataset, model, dim=dim, fappend=fappend,
+              df_min=df_min, df_max=df_max)
 
     # Evaluate classifier.
     eval(data, dataset, model, dim=dim, fappend=fappend, confusion=confusion)
