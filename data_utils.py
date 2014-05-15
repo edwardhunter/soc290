@@ -52,7 +52,7 @@ REUTERS_CACHE_NAME = "reuters21578.pkz"
 REUTERS10_IDX_NAME = "reuters21578-10-idx.pkz"
 REUTERS10_CACHE_NAME = "reuters21578-10.pkz"
 
-DATASETS = ('20news','20news4', '20news5', 'reuters21578-10', 'senate')
+DATASETS = ('20news','20news4', '20news5', 'reuters21578-10', 'senate5_1')
 
 """
 20 Newsgroups Labels
@@ -147,11 +147,11 @@ def make_20news(data_home=DATA_HOME):
 
     # Populate the 20 newsgroup data into our result data dictionary.
     data = {}
-    data['target_names'] = news_data_train.target_names
-    data['train'] = news_data_train.data
-    data['test'] = news_data_test.data
-    data['train_target'] = news_data_train.target
-    data['test_target'] = news_data_test.target
+    data['target_names'] = list(news_data_train.target_names)
+    data['train'] = list(news_data_train.data)
+    data['test'] = list(news_data_test.data)
+    data['train_target'] = list(news_data_train.target)
+    data['test_target'] = list(news_data_test.target)
 
     # Write out a zipped pickle for the full 20 news set.
     news20_path = os.path.join(data_home, NEWS20_CACHE_NAME)
@@ -354,15 +354,17 @@ def load_unsupervised_data(name, data_home=DATA_HOME):
     @return data: The unsupervised data dictionary.
     """
     data = load_data(name, data_home)
-    _data = data['train']
-    _data.extend(data['test'])
-    _target = data['train_target']
-    _target.extend(data['test_target'])
+    _data = list(data['train'])
+    _data.extend(list(data['test']))
+    _target = list(data['train_target'])
+    _target.extend(list(data['test_target']))
     combined_data = dict(
         data=_data,
         target=_target,
         target_names=data['target_names']
     )
+    print '\nLoaded for unsupervised learning, total data size: %i.' % len(_data)
+
     return combined_data
 
 
